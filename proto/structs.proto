@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package proto;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "/runner/proto";
+
+message Project {
+    string name = 1;
+    
+    map<string, Service> services = 2;
+
+    message Ref {
+        string id = 1;
+    }
+}
+
+message Service {
+    string image = 1;
+
+    repeated string depends = 2;
+
+    map<string, string> env = 3;
+
+    repeated string args = 4;
+}
+
+message ExitResult {
+    uint64 exitCode = 1;
+}
+
+message TaskState {
+    State state = 1;
+
+    Handle handle = 2;
+    
+    string hash = 3;
+
+    repeated Event events = 5;
+
+    enum State {
+        Pending = 0;
+        Running = 1;
+        Tainted = 2;
+        Dead = 3;
+    }
+
+    message Handle {
+        string containerId = 1;
+    }
+
+    message Event {
+        string type = 1;
+        map<string, string> details = 2;
+        google.protobuf.Timestamp time = 3;
+    }
+}
