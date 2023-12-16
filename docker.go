@@ -1,14 +1,17 @@
 package composer
 
 import (
+	"bytes"
 	"context"
 	"io"
+	"io/ioutil"
 	"os"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/ferranbt/composer/proto"
 )
 
@@ -130,6 +133,10 @@ func (d *dockerProvider) Create(c *ComputeResource) (*proto.ServiceState_Handle,
 		EndpointsConfig: map[string]*network.EndpointSettings{},
 	}
 
+	for _, mount := range c.Mounts {
+		hostConfig.Binds = append(hostConfig.Binds, mount.HostPath+":"+mount.TaskPath)
+	}
+
 	resp, err := d.cli.ContainerCreate(ctx, config, hostConfig, netConfig, nil, "")
 	if err != nil {
 		return nil, err
@@ -145,4 +152,67 @@ func (d *dockerProvider) Create(c *ComputeResource) (*proto.ServiceState_Handle,
 		ContainerId: resp.ID,
 	}
 	return handle, nil
+}
+
+func (d *dockerProvider) Exec(containerID string, args []string) (*proto.ExecTaskResult, error) {
+	ctx := context.Background()
+
+	config := types.ExecConfig{
+		AttachStderr: true,
+		AttachStdout: true,
+		Cmd:          args,
+	}
+
+	exec, err := d.cli.ContainerExecCreate(ctx, containerID, config)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := d.cli.ContainerExecAttach(ctx, exec.ID, types.ExecStartCheck{})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Close()
+
+	// read the output
+	var outBuf, errBuf bytes.Buffer
+	outputDone := make(chan error)
+
+	go func() {
+		// StdCopy demultiplexes the stream into two buffers
+		_, err = stdcopy.StdCopy(&outBuf, &errBuf, resp.Reader)
+		outputDone <- err
+	}()
+
+	select {
+	case err := <-outputDone:
+		if err != nil {
+			return nil, err
+		}
+		break
+
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	stdout, err := ioutil.ReadAll(&outBuf)
+	if err != nil {
+		return nil, err
+	}
+	stderr, err := ioutil.ReadAll(&errBuf)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := d.cli.ContainerExecInspect(ctx, exec.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	execResult := &proto.ExecTaskResult{
+		ExitCode: uint64(res.ExitCode),
+		Stdout:   string(stdout),
+		Stderr:   string(stderr),
+	}
+	return execResult, nil
 }

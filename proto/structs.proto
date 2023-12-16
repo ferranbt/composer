@@ -24,6 +24,13 @@ message Service {
     map<string, string> env = 3;
 
     repeated string args = 4;
+
+    repeated MountConfig mounts = 5;
+
+    message MountConfig {
+        string hostPath = 1;
+        string taskPath = 2;
+    }
 }
 
 message ExitResult {
@@ -55,4 +62,10 @@ message ServiceState {
         map<string, string> details = 2;
         google.protobuf.Timestamp time = 3;
     }
+}
+
+message ExecTaskResult {
+    string stdout = 1;
+    string stderr = 2;
+    uint64 exitCode = 3;
 }
