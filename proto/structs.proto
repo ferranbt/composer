@@ -4,7 +4,7 @@ package proto;
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "/runner/proto";
+option go_package = "/proto";
 
 message Project {
     string name = 1;
@@ -30,7 +30,7 @@ message ExitResult {
     uint64 exitCode = 1;
 }
 
-message TaskState {
+message ServiceState {
     State state = 1;
 
     Handle handle = 2;

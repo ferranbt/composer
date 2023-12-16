@@ -128,8 +128,8 @@ func (s *BoltdbStore) GetTasks(allocID string) ([]string, error) {
 	return tasks, nil
 }
 
-func (s *BoltdbStore) GetTaskState(allocID, taskName string) (*proto.TaskState, error) {
-	state := proto.TaskState{}
+func (s *BoltdbStore) GetTaskState(allocID, taskName string) (*proto.ServiceState, error) {
+	state := proto.ServiceState{}
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		allocsBkt := tx.Bucket(allocsBucket)
@@ -155,7 +155,7 @@ func (s *BoltdbStore) GetTaskState(allocID, taskName string) (*proto.TaskState, 
 	return &state, nil
 }
 
-func (s *BoltdbStore) PutTaskState(allocID string, taskName string, state *proto.TaskState) error {
+func (s *BoltdbStore) PutTaskState(allocID string, taskName string, state *proto.ServiceState) error {
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		allocsBkt := tx.Bucket(allocsBucket)
 
