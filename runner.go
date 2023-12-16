@@ -1,4 +1,4 @@
-package runner
+package composer
 
 import (
 	"github.com/ferranbt/composer/proto"
