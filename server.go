@@ -6,8 +6,19 @@ import (
 	"github.com/ferranbt/composer/proto"
 )
 
+type Notifier interface {
+	Notify(project, service string, states *proto.ServiceState)
+}
+
 type Config struct {
-	DbPath string
+	DbPath   string
+	Notifier Notifier
+}
+
+func WithNotifier(n Notifier) Option {
+	return func(c *Config) {
+		c.Notifier = n
+	}
 }
 
 func DefaultConfig() *Config {
@@ -19,18 +30,20 @@ func DefaultConfig() *Config {
 type Option func(*Config)
 
 type Server struct {
+	config  *Config
 	runners map[string]*ProjectRunner
 	store   *BoltdbStore
 	docker  *dockerProvider
 }
 
-func NewServer(config ...Option) (*Server, error) {
+func NewServer(configOpts ...Option) (*Server, error) {
 	cfg := DefaultConfig()
-	for _, opt := range config {
+	for _, opt := range configOpts {
 		opt(cfg)
 	}
 
 	r := &Server{
+		config:  cfg,
 		runners: map[string]*ProjectRunner{},
 	}
 
@@ -57,7 +70,7 @@ func (r *Server) initialLoad() error {
 	}
 
 	for _, p := range projects {
-		runner := newProjectRunner(p, r.docker, r.store)
+		runner := newProjectRunner(p, r.docker, r.store, r.config.Notifier)
 		if err := runner.Restore(); err != nil {
 			return err
 		}
@@ -72,7 +85,7 @@ func (r *Server) initialLoad() error {
 func (r *Server) Up(ctx context.Context, req *proto.Project) (*proto.Project_Ref, error) {
 	runner, ok := r.runners[req.Name]
 	if !ok {
-		runner = newProjectRunner(req, r.docker, r.store)
+		runner = newProjectRunner(req, r.docker, r.store, r.config.Notifier)
 
 		if err := r.store.PutProject(req); err != nil {
 			return nil, err
