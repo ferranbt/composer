@@ -4,6 +4,7 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 
+	"google.golang.org/protobuf/proto"
 	gproto "google.golang.org/protobuf/proto"
 )
 
@@ -25,4 +26,8 @@ func NewEvent(typ string) *ServiceState_Event {
 
 func (t *ServiceState) AddEvent(event *ServiceState_Event) {
 	t.Events = append(t.Events, event)
+}
+
+func (s *Service) Copy() *Service {
+	return proto.Clone(s).(*Service)
 }

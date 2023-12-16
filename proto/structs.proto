@@ -27,6 +27,8 @@ message Service {
 
     repeated MountConfig mounts = 5;
 
+    string networkMode = 6;
+
     message MountConfig {
         string hostPath = 1;
         string taskPath = 2;

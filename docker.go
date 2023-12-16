@@ -127,7 +127,9 @@ func (d *dockerProvider) Create(c *ComputeResource) (*proto.ServiceState_Handle,
 		Env:    env,
 		Labels: labels,
 	}
-	hostConfig := &container.HostConfig{}
+	hostConfig := &container.HostConfig{
+		NetworkMode: container.NetworkMode(c.Service.NetworkMode),
+	}
 
 	netConfig := &network.NetworkingConfig{
 		EndpointsConfig: map[string]*network.EndpointSettings{},

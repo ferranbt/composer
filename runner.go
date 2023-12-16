@@ -1,6 +1,8 @@
 package composer
 
 import (
+	"strings"
+
 	"github.com/ferranbt/composer/proto"
 )
 
@@ -74,6 +76,23 @@ func (r *ProjectRunner) runIteration() {
 
 	for name := range res.create {
 		service := r.project.Services[name]
+
+		hash, err := service.Hash()
+		if err != nil {
+			panic(err)
+		}
+
+		// rewrite the network host config if it refers to another running container
+		service = service.Copy()
+		if strings.HasPrefix(service.NetworkMode, "service:") {
+			dep := strings.TrimPrefix(service.NetworkMode, "service:")
+			depState, ok := r.containers[dep]
+
+			if ok && depState.State == proto.ServiceState_Running {
+				service.NetworkMode = "container:" + depState.Handle.ContainerId
+			}
+		}
+
 		res := &ComputeResource{
 			Name:    name,
 			Project: r.project.Name,
@@ -84,10 +103,6 @@ func (r *ProjectRunner) runIteration() {
 			panic(err)
 		}
 
-		hash, err := service.Hash()
-		if err != nil {
-			panic(err)
-		}
 		state := &proto.ServiceState{
 			State:  proto.ServiceState_Running,
 			Handle: handle,
