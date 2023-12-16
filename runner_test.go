@@ -1,6 +1,7 @@
 package composer
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -86,6 +87,54 @@ func TestRunner_Up(t *testing.T) {
 
 		return true
 	})
+}
+
+func TestRunner_SharedIP(t *testing.T) {
+	project := &proto.Project{
+		Name: "test",
+		Services: map[string]*proto.Service{
+			"a": {
+				Image: "busybox:1.29.3",
+				Args:  []string{"sleep", "30"},
+			},
+			"a1": {
+				Image:       "busybox:1.29.3",
+				Args:        []string{"sleep", "30"},
+				Depends:     []string{"a"},
+				NetworkMode: "service:a",
+			},
+		},
+	}
+
+	r := newTestRunner(t, project)
+	go r.run()
+
+	WaitUntil(t, func() bool {
+		if !r.complete {
+			return false
+		}
+
+		createdEvents := 0
+		for _, state := range r.containers {
+			for _, event := range state.Events {
+				if event.Type == "running" {
+					createdEvents++
+				}
+			}
+		}
+		return createdEvents == 2
+	})
+
+	ipCommand := strings.Split("/bin/ip route", " ")
+
+	resA, err := r.docker.Exec(r.containers["a"].Handle.ContainerId, ipCommand)
+	require.NoError(t, err)
+
+	resA1, err := r.docker.Exec(r.containers["a1"].Handle.ContainerId, ipCommand)
+	require.NoError(t, err)
+
+	require.NotEmpty(t, resA.Stdout)
+	require.Equal(t, resA.Stdout, resA1.Stdout)
 }
 
 func newTestRunner(t *testing.T, p *proto.Project) *ProjectRunner {
