@@ -57,6 +57,7 @@ message ServiceState {
 
     message Handle {
         string containerId = 1;
+        string ip = 2;
     }
 
     message Event {

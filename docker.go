@@ -148,10 +148,16 @@ func (d *dockerProvider) Create(c *ComputeResource) (*proto.ServiceState_Handle,
 		return nil, err
 	}
 
+	container, err := d.cli.ContainerInspect(ctx, resp.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	go d.containerWait(c.Project, c.Name, resp.ID)
 
 	handle := &proto.ServiceState_Handle{
 		ContainerId: resp.ID,
+		Ip:          container.NetworkSettings.IPAddress,
 	}
 	return handle, nil
 }
