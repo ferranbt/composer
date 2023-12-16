@@ -47,6 +47,13 @@ func TestRunner_Up(t *testing.T) {
 			return false
 		}
 
+		// all of the containers have assigned IPs
+		for _, state := range r.containers {
+			if state.Handle.Ip == "" {
+				return false
+			}
+		}
+
 		return true
 	})
 
@@ -127,14 +134,21 @@ func TestRunner_SharedIP(t *testing.T) {
 
 	ipCommand := strings.Split("/bin/ip route", " ")
 
-	resA, err := r.docker.Exec(r.containers["a"].Handle.ContainerId, ipCommand)
+	aState := r.containers["a"]
+	a1State := r.containers["a1"]
+
+	resA, err := r.docker.Exec(aState.Handle.ContainerId, ipCommand)
 	require.NoError(t, err)
 
-	resA1, err := r.docker.Exec(r.containers["a1"].Handle.ContainerId, ipCommand)
+	resA1, err := r.docker.Exec(a1State.Handle.ContainerId, ipCommand)
 	require.NoError(t, err)
 
 	require.NotEmpty(t, resA.Stdout)
 	require.Equal(t, resA.Stdout, resA1.Stdout)
+
+	// a1 does not have an ip assigned
+	require.NotEmpty(t, aState.Handle.Ip)
+	require.Empty(t, a1State.Handle.Ip)
 }
 
 func newTestRunner(t *testing.T, p *proto.Project) *ProjectRunner {
