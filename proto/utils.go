@@ -17,12 +17,12 @@ func (s *Service) Hash() (string, error) {
 	return hex.EncodeToString(hash[:]), nil
 }
 
-func NewEvent(typ string) *TaskState_Event {
-	return &TaskState_Event{
+func NewEvent(typ string) *ServiceState_Event {
+	return &ServiceState_Event{
 		Type: typ,
 	}
 }
 
-func (t *TaskState) AddEvent(event *TaskState_Event) {
+func (t *ServiceState) AddEvent(event *ServiceState_Event) {
 	t.Events = append(t.Events, event)
 }

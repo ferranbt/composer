@@ -8,7 +8,7 @@ import (
 )
 
 type reconciler struct {
-	containers map[string]*proto.TaskState
+	containers map[string]*proto.ServiceState
 	project    *proto.Project
 	dag        *dag.Dag
 }
@@ -28,7 +28,7 @@ func (r *reconcileResults) noUpdates() bool {
 	return len(r.create) == 0 && len(r.taint) == 0 && len(r.remove) == 0
 }
 
-func newReconciler(containers map[string]*proto.TaskState, project *proto.Project) *reconciler {
+func newReconciler(containers map[string]*proto.ServiceState, project *proto.Project) *reconciler {
 	return &reconciler{
 		containers: containers,
 		project:    project,
@@ -82,7 +82,7 @@ func (r *reconciler) compute() *reconcileResults {
 		allDependenciesRunning := true
 		for _, dep := range service.Depends {
 			dependency, ok := r.containers[dep]
-			if !ok || dependency.State != proto.TaskState_Running {
+			if !ok || dependency.State != proto.ServiceState_Running {
 				allDependenciesRunning = false
 				break
 			}
@@ -94,11 +94,11 @@ func (r *reconciler) compute() *reconcileResults {
 		}
 
 		// if the node does not exist, we need to create it
-		if !exists || node.State == proto.TaskState_Dead {
+		if !exists || node.State == proto.ServiceState_Dead {
 			res.create[name] = struct{}{}
 		} else {
 			// if the node is tainted, remove it
-			if node.State == proto.TaskState_Tainted {
+			if node.State == proto.ServiceState_Tainted {
 				res.remove[name] = struct{}{}
 				break
 			}
@@ -123,7 +123,7 @@ func (r *reconciler) compute() *reconcileResults {
 	// are all the nodes running?
 	allRunning := true
 	for _, n := range r.containers {
-		if n.State != proto.TaskState_Running {
+		if n.State != proto.ServiceState_Running {
 			allRunning = false
 			break
 		}

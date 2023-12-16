@@ -62,7 +62,7 @@ func newDockerProvider(updater Updater) *dockerProvider {
 	return &dockerProvider{cli: cli, updater: updater}
 }
 
-func (d *dockerProvider) Reattach(project, id string, handle *proto.TaskState_Handle) {
+func (d *dockerProvider) Reattach(project, id string, handle *proto.ServiceState_Handle) {
 	go d.containerWait(project, id, handle.ContainerId)
 }
 
@@ -92,7 +92,7 @@ func (d *dockerProvider) Kill(id string) error {
 	return d.cli.ContainerKill(context.Background(), id, "SIGKILL")
 }
 
-func (d *dockerProvider) Create(c *ComputeResource) (*proto.TaskState_Handle, error) {
+func (d *dockerProvider) Create(c *ComputeResource) (*proto.ServiceState_Handle, error) {
 	// check if the image exists
 	_, _, err := d.cli.ImageInspectWithRaw(context.Background(), c.Image)
 	if err != nil {
@@ -141,7 +141,7 @@ func (d *dockerProvider) Create(c *ComputeResource) (*proto.TaskState_Handle, er
 
 	go d.containerWait(c.Project, c.Name, resp.ID)
 
-	handle := &proto.TaskState_Handle{
+	handle := &proto.ServiceState_Handle{
 		ContainerId: resp.ID,
 	}
 	return handle, nil

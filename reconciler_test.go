@@ -36,7 +36,7 @@ func TestReconciler_WithDependency(t *testing.T) {
 		},
 	}
 
-	nodes := map[string]*proto.TaskState{}
+	nodes := map[string]*proto.ServiceState{}
 
 	res := newReconciler(nodes, project)
 	assertResults(t, res.compute(), &resultExpectation{
@@ -59,7 +59,7 @@ func TestReconciler_BulkNoDependencies(t *testing.T) {
 		}
 	}
 
-	nodes := map[string]*proto.TaskState{}
+	nodes := map[string]*proto.ServiceState{}
 
 	res := newReconciler(nodes, project)
 	assertResults(t, res.compute(), &resultExpectation{

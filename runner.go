@@ -8,7 +8,7 @@ type ProjectRunner struct {
 	project *proto.Project
 
 	// containers is a map of the state for the containers in this project
-	containers map[string]*proto.TaskState
+	containers map[string]*proto.ServiceState
 
 	docker   *dockerProvider
 	store    *BoltdbStore
@@ -22,7 +22,7 @@ func newProjectRunner(project *proto.Project, docker *dockerProvider, store *Bol
 		project:    project,
 		docker:     docker,
 		store:      store,
-		containers: map[string]*proto.TaskState{},
+		containers: map[string]*proto.ServiceState{},
 		closeCh:    make(chan struct{}),
 		updateCh:   make(chan struct{}, 10),
 	}
@@ -86,8 +86,8 @@ func (r *ProjectRunner) runIteration() {
 		if err != nil {
 			panic(err)
 		}
-		state := &proto.TaskState{
-			State:  proto.TaskState_Running,
+		state := &proto.ServiceState{
+			State:  proto.ServiceState_Running,
 			Handle: handle,
 			Hash:   hash,
 		}
@@ -113,7 +113,7 @@ func (r *ProjectRunner) runIteration() {
 
 	for name := range res.taint {
 		state := r.containers[name]
-		state.State = proto.TaskState_Tainted
+		state.State = proto.ServiceState_Tainted
 		state.AddEvent(proto.NewEvent("taint"))
 
 		if err := r.store.PutTaskState(r.project.Name, name, state); err != nil {
@@ -142,9 +142,9 @@ func (r *ProjectRunner) Update(c *ComputeUpdate) error {
 	}
 
 	if c.Created != nil {
-		node.State = proto.TaskState_Running
+		node.State = proto.ServiceState_Running
 	} else if c.Completed != nil {
-		node.State = proto.TaskState_Dead
+		node.State = proto.ServiceState_Dead
 		node.AddEvent(proto.NewEvent("completed"))
 	}
 
