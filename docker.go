@@ -3,9 +3,7 @@ package composer
 import (
 	"bytes"
 	"context"
-	"io"
 	"io/ioutil"
-	"os"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -52,8 +50,9 @@ type Provider interface {
 }
 
 type dockerProvider struct {
-	cli     *client.Client
-	updater Updater
+	cli         *client.Client
+	coordinator *dockerImageCoordinator
+	updater     Updater
 }
 
 func newDockerProvider(updater Updater) *dockerProvider {
@@ -62,7 +61,11 @@ func newDockerProvider(updater Updater) *dockerProvider {
 		panic(err)
 	}
 
-	return &dockerProvider{cli: cli, updater: updater}
+	return &dockerProvider{
+		cli:         cli,
+		coordinator: newDockerImageCoordinator(cli),
+		updater:     updater,
+	}
 }
 
 func (d *dockerProvider) Reattach(project, id string, handle *proto.ServiceState_Handle) {
@@ -96,19 +99,11 @@ func (d *dockerProvider) Kill(id string) error {
 }
 
 func (d *dockerProvider) Create(c *ComputeResource) (*proto.ServiceState_Handle, error) {
-	// check if the image exists
-	_, _, err := d.cli.ImageInspectWithRaw(context.Background(), c.Image)
-	if err != nil {
-		// pull the image
-		reader, err := d.cli.ImagePull(context.Background(), c.Image, types.ImagePullOptions{})
-		if err != nil {
-			return nil, err
-		}
-		defer reader.Close()
-		io.Copy(os.Stdout, reader)
-	}
-
 	ctx := context.Background()
+
+	if err := d.createImage(c.Image); err != nil {
+		return nil, err
+	}
 
 	env := []string{}
 	for k, v := range c.Env {
@@ -223,4 +218,16 @@ func (d *dockerProvider) Exec(containerID string, args []string) (*proto.ExecTas
 		Stderr:   string(stderr),
 	}
 	return execResult, nil
+}
+
+func (d *dockerProvider) createImage(image string) error {
+	_, dockerImageRaw, _ := d.cli.ImageInspectWithRaw(context.Background(), image)
+	if dockerImageRaw != nil {
+		// already available
+		return nil
+	}
+	if _, err := d.coordinator.PullImage(image); err != nil {
+		return err
+	}
+	return nil
 }
