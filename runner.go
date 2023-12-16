@@ -9,6 +9,7 @@ type ProjectRunner struct {
 
 	// containers is a map of the state for the containers in this project
 	containers map[string]*proto.ServiceState
+	notifyFn   Notifier
 
 	docker   *dockerProvider
 	store    *BoltdbStore
@@ -17,7 +18,7 @@ type ProjectRunner struct {
 	updateCh chan struct{}
 }
 
-func newProjectRunner(project *proto.Project, docker *dockerProvider, store *BoltdbStore) *ProjectRunner {
+func newProjectRunner(project *proto.Project, docker *dockerProvider, store *BoltdbStore, notifyFn Notifier) *ProjectRunner {
 	p := &ProjectRunner{
 		project:    project,
 		docker:     docker,
@@ -25,6 +26,7 @@ func newProjectRunner(project *proto.Project, docker *dockerProvider, store *Bol
 		containers: map[string]*proto.ServiceState{},
 		closeCh:    make(chan struct{}),
 		updateCh:   make(chan struct{}, 10),
+		notifyFn:   notifyFn,
 	}
 	return p
 }
@@ -98,10 +100,7 @@ func (r *ProjectRunner) runIteration() {
 		}
 
 		state.AddEvent(proto.NewEvent("running"))
-		if err := r.store.PutTaskState(r.project.Name, name, state); err != nil {
-			panic(err)
-		}
-		r.containers[name] = state
+		r.setContainerState(name, state)
 	}
 
 	for name := range res.remove {
@@ -116,10 +115,7 @@ func (r *ProjectRunner) runIteration() {
 		state.State = proto.ServiceState_Tainted
 		state.AddEvent(proto.NewEvent("taint"))
 
-		if err := r.store.PutTaskState(r.project.Name, name, state); err != nil {
-			panic(err)
-		}
-		r.containers[name] = state
+		r.setContainerState(name, state)
 	}
 
 	if len(res.create) != 0 {
@@ -135,6 +131,16 @@ func (r *ProjectRunner) UpdateProject(p *proto.Project) {
 	r.notify()
 }
 
+func (r *ProjectRunner) setContainerState(name string, state *proto.ServiceState) {
+	if err := r.store.PutTaskState(r.project.Name, name, state); err != nil {
+		panic(err)
+	}
+	r.containers[name] = state
+	if r.notifyFn != nil {
+		r.notifyFn.Notify(r.project.Name, name, state)
+	}
+}
+
 func (r *ProjectRunner) Update(c *ComputeUpdate) error {
 	node, ok := r.containers[c.Name]
 	if !ok {
@@ -148,10 +154,7 @@ func (r *ProjectRunner) Update(c *ComputeUpdate) error {
 		node.AddEvent(proto.NewEvent("completed"))
 	}
 
-	r.containers[c.Name] = node
-	if err := r.store.PutTaskState(r.project.Name, c.Name, node); err != nil {
-		panic(err)
-	}
+	r.setContainerState(c.Name, node)
 
 	select {
 	case r.updateCh <- struct{}{}:

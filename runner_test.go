@@ -93,7 +93,7 @@ func newTestRunner(t *testing.T, p *proto.Project) *ProjectRunner {
 	require.NoError(t, store.PutProject(p))
 
 	updater := &localUpdater{}
-	runner := newProjectRunner(p, newDockerProvider(updater), store)
+	runner := newProjectRunner(p, newDockerProvider(updater), store, nil)
 	updater.p = runner
 
 	return runner
