@@ -17,7 +17,7 @@ type ProjectRunner struct {
 	// services is the list of running services
 	services map[string]*serviceRunner
 
-	notifyFn Notifier
+	notifier Notifier
 
 	docker   *docker.Provider
 	store    *BoltdbStore
@@ -26,7 +26,7 @@ type ProjectRunner struct {
 	updateCh chan struct{}
 }
 
-func newProjectRunner(project *proto.Project, docker *docker.Provider, store *BoltdbStore, notifyFn Notifier) *ProjectRunner {
+func newProjectRunner(project *proto.Project, docker *docker.Provider, store *BoltdbStore, notifier Notifier) *ProjectRunner {
 	p := &ProjectRunner{
 		project:  project,
 		docker:   docker,
@@ -34,7 +34,7 @@ func newProjectRunner(project *proto.Project, docker *docker.Provider, store *Bo
 		services: map[string]*serviceRunner{},
 		closeCh:  make(chan struct{}),
 		updateCh: make(chan struct{}, 10),
-		notifyFn: notifyFn,
+		notifier: notifier,
 	}
 	return p
 }
@@ -46,7 +46,7 @@ func (p *ProjectRunner) Restore() error {
 	}
 
 	for _, id := range tasksIds {
-		runner := newServiceRunner(p.project, id, p.project.Services[id], p.docker, p.store, p.taskStateUpdated)
+		runner := newServiceRunner(p.project, id, p.project.Services[id], p.docker, p.store, p.taskStateUpdated, p.notifier)
 		p.services[id] = runner
 
 		go runner.Run()
@@ -109,7 +109,7 @@ func (r *ProjectRunner) runIteration() {
 			}
 		}
 
-		runner := newServiceRunner(r.project, name, service, r.docker, r.store, r.taskStateUpdated)
+		runner := newServiceRunner(r.project, name, service, r.docker, r.store, r.taskStateUpdated, r.notifier)
 		r.services[name] = runner
 
 		go runner.Run()

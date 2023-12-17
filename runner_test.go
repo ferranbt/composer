@@ -34,12 +34,12 @@ func TestRunner_MultipleServices_Simple(t *testing.T) {
 			return false
 		}
 
+		events := r.notifier.(*eventSink).events
+
 		createdEvents := 0
-		for _, state := range status.State {
-			for _, event := range state.Events {
-				if event.Type == proto.TaskStarted {
-					createdEvents++
-				}
+		for _, event := range events {
+			if event.Type == proto.TaskStarted {
+				createdEvents++
 			}
 		}
 		if createdEvents != 2 {
@@ -82,12 +82,12 @@ func TestRunner_MultipleServices_Depends(t *testing.T) {
 			return false
 		}
 
+		events := r.notifier.(*eventSink).events
+
 		createdEvents := 0
-		for _, state := range status.State {
-			for _, event := range state.Events {
-				if event.Type == proto.TaskStarted {
-					createdEvents++
-				}
+		for _, event := range events {
+			if event.Type == proto.TaskStarted {
+				createdEvents++
 			}
 		}
 		if createdEvents != 2 {
@@ -139,11 +139,10 @@ func TestRunner_UpdateDependencies(t *testing.T) {
 		}
 
 		createdEvents := 0
-		for _, state := range status.State {
-			for _, event := range state.Events {
-				if event.Type == proto.TaskStarted {
-					createdEvents++
-				}
+		events := r.notifier.(*eventSink).events
+		for _, event := range events {
+			if event.Type == proto.TaskStarted {
+				createdEvents++
 			}
 		}
 		if createdEvents != 3 {
@@ -180,18 +179,24 @@ func TestRunner_UpdateDependencies(t *testing.T) {
 			completedEvents uint64
 			createdEvents   uint64
 		)
-		for _, state := range status.State {
-			for _, event := range state.Events {
-				if event.Type == proto.TaskStarted {
-					createdEvents++
-				}
-				if event.Type == proto.TaskTerminated {
-					completedEvents++
-				}
+		events := r.notifier.(*eventSink).events
+		for _, event := range events {
+			if event.Type == proto.TaskStarted {
+				createdEvents++
+			}
+			if event.Type == proto.TaskTerminated {
+				completedEvents++
 			}
 		}
 
-		return createdEvents == 4
+		if createdEvents != 6 {
+			return false
+		}
+		if completedEvents != 2 {
+			return false
+		}
+
+		return true
 	})
 }
 
@@ -220,11 +225,10 @@ func TestRunner_SharedIP(t *testing.T) {
 		status = r.Status()
 
 		createdEvents := 0
-		for _, state := range status.State {
-			for _, event := range state.Events {
-				if event.Type == proto.TaskStarted {
-					createdEvents++
-				}
+		events := r.notifier.(*eventSink).events
+		for _, event := range events {
+			if event.Type == proto.TaskStarted {
+				createdEvents++
 			}
 		}
 
@@ -254,7 +258,8 @@ func newTestRunner(t *testing.T, p *proto.Project) *ProjectRunner {
 	store := newInmemStore(t)
 	require.NoError(t, store.PutProject(p))
 
-	runner := newProjectRunner(p, docker.NewProvider(), store, nil)
+	sink := &eventSink{}
+	runner := newProjectRunner(p, docker.NewProvider(), store, sink)
 	return runner
 }
 

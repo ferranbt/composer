@@ -8,12 +8,18 @@ import (
 )
 
 type Notifier interface {
-	Notify(project, service string, states *proto.ServiceState)
+	Notify(event *proto.Event)
 }
 
 type Config struct {
 	DbPath   string
 	Notifier Notifier
+}
+
+type mockNotifier struct {
+}
+
+func (m *mockNotifier) Notify(event *proto.Event) {
 }
 
 func WithNotifier(n Notifier) Option {
@@ -24,7 +30,8 @@ func WithNotifier(n Notifier) Option {
 
 func DefaultConfig() *Config {
 	return &Config{
-		DbPath: "runner.db",
+		DbPath:   "runner.db",
+		Notifier: &mockNotifier{},
 	}
 }
 
