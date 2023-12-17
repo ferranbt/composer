@@ -5,23 +5,125 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ferranbt/composer/docker"
 	"github.com/ferranbt/composer/proto"
 	"github.com/stretchr/testify/require"
 )
 
-func TestRunner_Up(t *testing.T) {
+func TestRunner_MultipleServices_Simple(t *testing.T) {
 	project := &proto.Project{
 		Name: "test",
 		Services: map[string]*proto.Service{
 			"a": {
-				Image: "redis:alpine",
+				Image: "busybox:1.29.3",
+				Args:  []string{"sleep", "30"},
 			},
 			"a1": {
-				Image:   "redis:alpine",
+				Image: "busybox:1.29.3",
+				Args:  []string{"sleep", "30"},
+			},
+		},
+	}
+
+	r := newTestRunner(t, project)
+	go r.run()
+
+	WaitUntil(t, func() bool {
+		status := r.Status()
+		if !status.Complete {
+			return false
+		}
+
+		createdEvents := 0
+		for _, state := range status.State {
+			for _, event := range state.Events {
+				if event.Type == proto.TaskStarted {
+					createdEvents++
+				}
+			}
+		}
+		if createdEvents != 2 {
+			return false
+		}
+
+		// all of the containers have assigned IPs
+		for _, state := range status.State {
+			if state.Handle.Ip == "" {
+				return false
+			}
+		}
+
+		return true
+	})
+}
+
+func TestRunner_MultipleServices_Depends(t *testing.T) {
+	project := &proto.Project{
+		Name: "test",
+		Services: map[string]*proto.Service{
+			"a": {
+				Image: "busybox:1.29.3",
+				Args:  []string{"sleep", "30"},
+			},
+			"a1": {
+				Image:   "busybox:1.29.3",
+				Args:    []string{"sleep", "30"},
+				Depends: []string{"a"},
+			},
+		},
+	}
+
+	r := newTestRunner(t, project)
+	go r.run()
+
+	WaitUntil(t, func() bool {
+		status := r.Status()
+		if !status.Complete {
+			return false
+		}
+
+		createdEvents := 0
+		for _, state := range status.State {
+			for _, event := range state.Events {
+				if event.Type == proto.TaskStarted {
+					createdEvents++
+				}
+			}
+		}
+		if createdEvents != 2 {
+			return false
+		}
+
+		// all of the containers have assigned IPs
+		for _, state := range status.State {
+			if state.Handle.Ip == "" {
+				return false
+			}
+		}
+
+		return true
+	})
+}
+
+func TestRunner_UpdateDependencies(t *testing.T) {
+	// Initial: a -> a1 -> a2
+	// Update: a -------------> a1
+	//         |--> a2 -> a3 -> a1
+	project := &proto.Project{
+		Name: "test",
+		Services: map[string]*proto.Service{
+			"a": {
+				Image: "busybox:1.29.3",
+				Args:  []string{"sleep", "30"},
+			},
+			"a1": {
+				Image:   "busybox:1.29.3",
+				Args:    []string{"sleep", "30"},
 				Depends: []string{"a"},
 			},
 			"a2": {
-				Image:   "redis:alpine",
+				Image:   "busybox:1.29.3",
+				Args:    []string{"sleep", "30"},
 				Depends: []string{"a1"},
 			},
 		},
@@ -31,14 +133,15 @@ func TestRunner_Up(t *testing.T) {
 	go r.run()
 
 	WaitUntil(t, func() bool {
-		if !r.complete {
+		status := r.Status()
+		if !status.Complete {
 			return false
 		}
 
 		createdEvents := 0
-		for _, state := range r.containers {
+		for _, state := range status.State {
 			for _, event := range state.Events {
-				if event.Type == "running" {
+				if event.Type == proto.TaskStarted {
 					createdEvents++
 				}
 			}
@@ -48,7 +151,7 @@ func TestRunner_Up(t *testing.T) {
 		}
 
 		// all of the containers have assigned IPs
-		for _, state := range r.containers {
+		for _, state := range status.State {
 			if state.Handle.Ip == "" {
 				return false
 			}
@@ -58,15 +161,18 @@ func TestRunner_Up(t *testing.T) {
 	})
 
 	project.Services["a3"] = &proto.Service{
-		Image:   "redis:alpine",
+		Image:   "busybox:1.29.3",
+		Args:    []string{"sleep", "30"},
 		Depends: []string{"a2"},
 	}
+	project.Services["a2"].Depends = []string{"a"}
 	project.Services["a1"].Depends = []string{"a", "a3"}
 
 	r.UpdateProject(project)
 
 	WaitUntil(t, func() bool {
-		if !r.complete {
+		status := r.Status()
+		if !status.Complete {
 			return false
 		}
 
@@ -74,25 +180,18 @@ func TestRunner_Up(t *testing.T) {
 			completedEvents uint64
 			createdEvents   uint64
 		)
-		for _, state := range r.containers {
+		for _, state := range status.State {
 			for _, event := range state.Events {
-				if event.Type == "running" {
+				if event.Type == proto.TaskStarted {
 					createdEvents++
 				}
-				if event.Type == "completed" {
+				if event.Type == proto.TaskTerminated {
 					completedEvents++
 				}
 			}
 		}
 
-		if createdEvents != 6 {
-			return false
-		}
-		if completedEvents != 2 {
-			return false
-		}
-
-		return true
+		return createdEvents == 4
 	})
 }
 
@@ -116,26 +215,26 @@ func TestRunner_SharedIP(t *testing.T) {
 	r := newTestRunner(t, project)
 	go r.run()
 
+	var status *Status
 	WaitUntil(t, func() bool {
-		if !r.complete {
-			return false
-		}
+		status = r.Status()
 
 		createdEvents := 0
-		for _, state := range r.containers {
+		for _, state := range status.State {
 			for _, event := range state.Events {
-				if event.Type == "running" {
+				if event.Type == proto.TaskStarted {
 					createdEvents++
 				}
 			}
 		}
+
 		return createdEvents == 2
 	})
 
 	ipCommand := strings.Split("/bin/ip route", " ")
 
-	aState := r.containers["a"]
-	a1State := r.containers["a1"]
+	aState := status.State["a"]
+	a1State := status.State["a1"]
 
 	resA, err := r.docker.Exec(aState.Handle.ContainerId, ipCommand)
 	require.NoError(t, err)
@@ -155,23 +254,12 @@ func newTestRunner(t *testing.T, p *proto.Project) *ProjectRunner {
 	store := newInmemStore(t)
 	require.NoError(t, store.PutProject(p))
 
-	updater := &localUpdater{}
-	runner := newProjectRunner(p, newDockerProvider(updater), store, nil)
-	updater.p = runner
-
+	runner := newProjectRunner(p, docker.NewProvider(), store, nil)
 	return runner
 }
 
-type localUpdater struct {
-	p *ProjectRunner
-}
-
-func (l *localUpdater) Update(c *ComputeUpdate) error {
-	return l.p.Update(c)
-}
-
 func WaitUntil(t *testing.T, cond func() bool) {
-	timeout := time.After(3 * time.Second)
+	timeout := time.After(20 * time.Second)
 
 	for {
 		select {

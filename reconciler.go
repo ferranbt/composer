@@ -35,11 +35,6 @@ func newReconciler(containers map[string]*proto.ServiceState, project *proto.Pro
 	}
 }
 
-type serviceWithName struct {
-	Name string
-	*proto.Service
-}
-
 func (r *reconciler) buildDag() {
 	d := &dag.Dag{}
 
@@ -110,6 +105,13 @@ func (r *reconciler) compute() *reconcileResults {
 				panic(err)
 			}
 			if node.Hash != serviceHash {
+
+				fmt.Println("-- node in reconcile --", name)
+				fmt.Println(service)
+				fmt.Println(service.NetworkMode)
+				fmt.Println(serviceHash)
+
+				panic("- hash not correct ?? --")
 				res.remove[name] = struct{}{}
 
 				// taint the nodes that depend on this one

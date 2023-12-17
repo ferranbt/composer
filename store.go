@@ -12,9 +12,10 @@ import (
 )
 
 var (
-	allocsBucket = []byte("allocs")
-	allocKey     = []byte("alloc")
-	taskStateKey = []byte("task-state")
+	allocsBucket  = []byte("allocs")
+	allocKey      = []byte("alloc")
+	taskStateKey  = []byte("task-state")
+	taskHandleKey = []byte("task-handle")
 )
 
 func taskKey(name string) []byte {
@@ -128,8 +129,9 @@ func (s *BoltdbStore) GetTasks(allocID string) ([]string, error) {
 	return tasks, nil
 }
 
-func (s *BoltdbStore) GetTaskState(allocID, taskName string) (*proto.ServiceState, error) {
+func (s *BoltdbStore) GetTaskState(allocID, taskName string) (*proto.ServiceState, *proto.ServiceState_Handle, error) {
 	state := proto.ServiceState{}
+	handle := proto.ServiceState_Handle{}
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		allocsBkt := tx.Bucket(allocsBucket)
@@ -146,13 +148,16 @@ func (s *BoltdbStore) GetTaskState(allocID, taskName string) (*proto.ServiceStat
 		if err := dbGet(taskBkt, taskStateKey, &state); err != nil {
 			return fmt.Errorf("failed to get task state '%s' '%s'", allocID, taskName)
 		}
+		if err := dbGet(taskBkt, taskHandleKey, &handle); err != nil {
+			return fmt.Errorf("failed to get handle '%s' '%s'", allocID, taskName)
+		}
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get task state %v", err)
+		return nil, nil, fmt.Errorf("failed to get task state %v", err)
 	}
 
-	return &state, nil
+	return &state, &handle, nil
 }
 
 func (s *BoltdbStore) PutTaskState(allocID string, taskName string, state *proto.ServiceState) error {
@@ -175,6 +180,30 @@ func (s *BoltdbStore) PutTaskState(allocID string, taskName string, state *proto
 	})
 	if err != nil {
 		return fmt.Errorf("failed to put task state: %v", err)
+	}
+	return nil
+}
+
+func (s *BoltdbStore) PutTaskHandle(allocID string, taskName string, handle *proto.ServiceState_Handle) error {
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		allocsBkt := tx.Bucket(allocsBucket)
+
+		allocBkt := allocsBkt.Bucket([]byte(allocID))
+		if allocBkt == nil {
+			return fmt.Errorf("alloc '%s' not found", allocID)
+		}
+
+		taskBkt, err := allocBkt.CreateBucketIfNotExists(taskKey(taskName))
+		if err != nil {
+			return err
+		}
+		if err := dbPut(taskBkt, taskHandleKey, handle); err != nil {
+			return fmt.Errorf("failed to get handle %s %s", allocID, taskName)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	return nil
 }

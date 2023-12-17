@@ -3,6 +3,7 @@ package composer
 import (
 	"context"
 
+	"github.com/ferranbt/composer/docker"
 	"github.com/ferranbt/composer/proto"
 )
 
@@ -33,7 +34,7 @@ type Server struct {
 	config  *Config
 	runners map[string]*ProjectRunner
 	store   *BoltdbStore
-	docker  *dockerProvider
+	docker  *docker.Provider
 }
 
 func NewServer(configOpts ...Option) (*Server, error) {
@@ -53,7 +54,7 @@ func NewServer(configOpts ...Option) (*Server, error) {
 	}
 	r.store = store
 
-	docker := newDockerProvider(r)
+	docker := docker.NewProvider()
 	r.docker = docker
 
 	if err := r.initialLoad(); err != nil {
@@ -97,8 +98,4 @@ func (r *Server) Up(ctx context.Context, req *proto.Project) (*proto.Project_Ref
 		runner.UpdateProject(req)
 	}
 	return nil, nil
-}
-
-func (r *Server) Update(c *ComputeUpdate) error {
-	return r.runners[c.Project].Update(c)
 }

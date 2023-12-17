@@ -29,9 +29,14 @@ message Service {
 
     string networkMode = 6;
 
+    RestartPolicy restartPolicy = 7;
+
     message MountConfig {
         string hostPath = 1;
         string taskPath = 2;
+    }
+
+    message RestartPolicy {
     }
 }
 
@@ -47,6 +52,8 @@ message ServiceState {
     string hash = 3;
 
     repeated Event events = 5;
+
+    bool failed = 6;
 
     enum State {
         Pending = 0;
