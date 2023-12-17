@@ -3,8 +3,7 @@ package docker
 import (
 	"bytes"
 	"context"
-	"fmt"
-	"io/ioutil"
+	"io"
 	"log/slog"
 	"sync"
 	"time"
@@ -41,8 +40,6 @@ func (t *taskHandle) run() {
 		}
 	case status = <-statusCh:
 	}
-
-	fmt.Println("- task is done in provider -")
 
 	t.exitResultLock.Lock()
 	t.exitResult = &proto.ExitResult{
@@ -99,11 +96,11 @@ func (h *taskHandle) Exec(ctx context.Context, args []string) (*proto.ExecTaskRe
 		return nil, ctx.Err()
 	}
 
-	stdout, err := ioutil.ReadAll(&outBuf)
+	stdout, err := io.ReadAll(&outBuf)
 	if err != nil {
 		return nil, err
 	}
-	stderr, err := ioutil.ReadAll(&errBuf)
+	stderr, err := io.ReadAll(&errBuf)
 	if err != nil {
 		return nil, err
 	}

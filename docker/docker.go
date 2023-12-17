@@ -85,7 +85,6 @@ func (d *Provider) WaitTask(ctx context.Context, taskID string) (<-chan *proto.E
 }
 
 func (d *Provider) StopTask(taskID string, timeout time.Duration) error {
-	fmt.Println("_ STOP TASK _")
 	h, ok := d.store.Get(taskID)
 	if !ok {
 		return ErrTaskNotFound
@@ -95,7 +94,6 @@ func (d *Provider) StopTask(taskID string, timeout time.Duration) error {
 }
 
 func (d *Provider) DestroyTask(taskID string, force bool) error {
-	fmt.Println("_ DESTROY TASK _")
 	h, ok := d.store.Get(taskID)
 	if !ok {
 		return ErrTaskNotFound
