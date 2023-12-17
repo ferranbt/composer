@@ -18,15 +18,13 @@ func (s *Service) Hash() (string, error) {
 	return hex.EncodeToString(hash[:]), nil
 }
 
-func NewEvent(typ string) *ServiceState_Event {
-	return &ServiceState_Event{
+func NewEvent(project, service, typ string) *Event {
+	return &Event{
+		Project: project,
+		Service: service,
 		Type:    typ,
 		Details: map[string]string{},
 	}
-}
-
-func (t *ServiceState) AddEvent(event *ServiceState_Event) {
-	t.Events = append(t.Events, event)
 }
 
 func (s *Service) Copy() *Service {
@@ -37,27 +35,27 @@ func (r *ExitResult) Successful() bool {
 	return r.ExitCode == 0
 }
 
-func (t *ServiceState_Event) SetExitCode(c int64) *ServiceState_Event {
+func (t *Event) SetExitCode(c int64) *Event {
 	t.Details["exit_code"] = fmt.Sprintf("%d", c)
 	return t
 }
 
-func (t *ServiceState_Event) SetSignal(s int64) *ServiceState_Event {
+func (t *Event) SetSignal(s int64) *Event {
 	t.Details["signal"] = fmt.Sprintf("%d", s)
 	return t
 }
 
-func (t *ServiceState_Event) FailsTask() bool {
+func (t *Event) FailsTask() bool {
 	_, ok := t.Details["fails_task"]
 	return ok
 }
 
-func (t *ServiceState_Event) SetFailsTask() *ServiceState_Event {
+func (t *Event) SetFailsTask() *Event {
 	t.Details["fails_task"] = "true"
 	return t
 }
 
-func (t *ServiceState_Event) SetTaskFailed(name string) *ServiceState_Event {
+func (t *Event) SetTaskFailed(name string) *Event {
 	t.Details["failed_task"] = name
 	return t
 }

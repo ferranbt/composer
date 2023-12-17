@@ -29,9 +29,10 @@ type serviceRunner struct {
 	status           *proto.ServiceState
 	taskStateUpdated func()
 	restartCount     uint64
+	notifier         Notifier
 }
 
-func newServiceRunner(project *proto.Project, name string, service *proto.Service, driver *docker.Provider, store *BoltdbStore, taskStateUpdated func()) *serviceRunner {
+func newServiceRunner(project *proto.Project, name string, service *proto.Service, driver *docker.Provider, store *BoltdbStore, taskStateUpdated func(), notifier Notifier) *serviceRunner {
 	killCtx, killCancel := context.WithCancel(context.Background())
 
 	hash, err := service.Hash()
@@ -52,6 +53,7 @@ func newServiceRunner(project *proto.Project, name string, service *proto.Servic
 		waitCh:           make(chan struct{}),
 		taskStateUpdated: taskStateUpdated,
 		store:            store,
+		notifier:         notifier,
 	}
 }
 
@@ -130,11 +132,11 @@ func (s *serviceRunner) shouldRestart() (bool, time.Duration) {
 	s.restartCount++
 	if s.restartCount > 5 {
 		// too many restarts, consider this task dead and do not realocate
-		s.UpdateStatus(proto.ServiceState_Dead, proto.NewEvent(proto.TaskNotRestarting).SetFailsTask())
+		s.UpdateStatus(proto.ServiceState_Dead, proto.NewEvent(s.project.Name, s.name, proto.TaskNotRestarting).SetFailsTask())
 		return false, 0
 	}
 
-	s.UpdateStatus(proto.ServiceState_Pending, proto.NewEvent(proto.TaskRestarting))
+	s.UpdateStatus(proto.ServiceState_Pending, proto.NewEvent(s.project.Name, s.name, proto.TaskRestarting))
 	return true, time.Duration(2 * time.Second)
 }
 
@@ -184,11 +186,11 @@ func (t *serviceRunner) emitExitResultEvent(result *proto.ExitResult) {
 	if result == nil {
 		return
 	}
-	event := proto.NewEvent(proto.TaskTerminated).
+	event := proto.NewEvent(t.project.Name, t.name, proto.TaskTerminated).
 		SetExitCode(int64(result.ExitCode)).
 		SetSignal(0)
 
-	t.EmitEvent(event)
+	t.notifier.Notify(event)
 }
 
 func (t *serviceRunner) runDriver() error {
@@ -212,7 +214,7 @@ func (t *serviceRunner) runDriver() error {
 	if err := t.store.PutTaskHandle(t.project.Name, t.name, handle); err != nil {
 		return err
 	}
-	t.UpdateStatus(proto.ServiceState_Running, proto.NewEvent(proto.TaskStarted))
+	t.UpdateStatus(proto.ServiceState_Running, proto.NewEvent(t.project.Name, t.name, proto.TaskStarted))
 	return nil
 }
 
@@ -254,7 +256,7 @@ func (t *serviceRunner) Restore() error {
 	return nil
 }
 
-func (t *serviceRunner) UpdateStatus(status proto.ServiceState_State, ev *proto.ServiceState_Event) {
+func (t *serviceRunner) UpdateStatus(status proto.ServiceState_State, ev *proto.Event) {
 	t.statusLock.Lock()
 	defer t.statusLock.Unlock()
 
@@ -265,31 +267,11 @@ func (t *serviceRunner) UpdateStatus(status proto.ServiceState_State, ev *proto.
 		if ev.FailsTask() {
 			t.status.Failed = true
 		}
-		t.appendEventLocked(ev)
+		t.notifier.Notify(ev)
 	}
 
 	if err := t.store.PutTaskState(t.project.Name, t.name, t.status); err != nil {
 		t.logger.Warn("failed to persist task state during update status", "err", err)
 	}
 	t.taskStateUpdated()
-}
-
-func (t *serviceRunner) EmitEvent(ev *proto.ServiceState_Event) {
-	t.statusLock.Lock()
-	defer t.statusLock.Unlock()
-
-	t.appendEventLocked(ev)
-
-	if err := t.store.PutTaskState(t.project.Name, t.name, t.status); err != nil {
-		t.logger.Warn("failed to persist task state during emit event", "err", err)
-	}
-
-	t.taskStateUpdated()
-}
-
-func (t *serviceRunner) appendEventLocked(ev *proto.ServiceState_Event) {
-	if t.status.Events == nil {
-		t.status.Events = []*proto.ServiceState_Event{}
-	}
-	t.status.Events = append(t.status.Events, ev)
 }

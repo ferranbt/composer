@@ -8,7 +8,7 @@ import (
 )
 
 type Notifier interface {
-	Notify(project, service string, states *proto.ServiceState)
+	Notify(event *proto.Event)
 }
 
 type Config struct {

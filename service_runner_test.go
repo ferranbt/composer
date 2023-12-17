@@ -35,6 +35,17 @@ func testWaitForTaskToStart(t *testing.T, tr *serviceRunner) {
 	})
 }
 
+type eventSink struct {
+	events []*proto.Event
+}
+
+func (e *eventSink) Notify(event *proto.Event) {
+	if e.events == nil {
+		e.events = []*proto.Event{}
+	}
+	e.events = append(e.events, event)
+}
+
 func setupServiceRunner(t *testing.T, task *proto.Service, state *BoltdbStore) *serviceRunner {
 	name := "test-task"
 	driver := docker.NewProvider()
@@ -54,7 +65,8 @@ func setupServiceRunner(t *testing.T, task *proto.Service, state *BoltdbStore) *
 		assert.NoError(t, state.PutProject(project))
 	}
 
-	return newServiceRunner(project, name, task, driver, state, func() {})
+	sink := &eventSink{}
+	return newServiceRunner(project, name, task, driver, state, func() {}, sink)
 }
 
 func TestTaskRunner_Stop_ExitCode(t *testing.T) {
@@ -70,7 +82,8 @@ func TestTaskRunner_Stop_ExitCode(t *testing.T) {
 	err := r.Kill(context.Background())
 	require.NoError(t, err)
 
-	terminatedEvent := r.TaskState().Events[1]
+	events := r.notifier.(*eventSink).events
+	terminatedEvent := events[1]
 	require.Equal(t, terminatedEvent.Type, proto.TaskTerminated)
 	require.Equal(t, terminatedEvent.Details["exit_code"], "137")
 }
@@ -103,15 +116,9 @@ func TestTaskRunner_Restore_AlreadyRunning(t *testing.T) {
 	testWaitForTaskToDie(t, newRunner)
 
 	// assert the process only started once
-	state := newRunner.TaskState()
-
-	started := 0
-	for _, ev := range state.Events {
-		if ev.Type == proto.TaskStarted {
-			started++
-		}
-	}
-	assert.Equal(t, 1, started)
+	events := newRunner.notifier.(*eventSink).events
+	require.Len(t, events, 1)
+	require.Equal(t, events[0].Type, proto.TaskTerminated)
 }
 
 type testFn func() (bool, error)
