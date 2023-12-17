@@ -2,6 +2,7 @@ package composer
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ferranbt/composer/docker"
 	"github.com/ferranbt/composer/proto"
@@ -88,6 +89,15 @@ func (r *Server) initialLoad() error {
 	}
 
 	return nil
+}
+
+func (r *Server) GetProjectStatus(name string) (*Status, error) {
+	runner, ok := r.runners[name]
+	if !ok {
+		return nil, fmt.Errorf("project %s not found", name)
+	}
+
+	return runner.Status(), nil
 }
 
 func (r *Server) Up(ctx context.Context, req *proto.Project) (*proto.Project_Ref, error) {
