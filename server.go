@@ -16,6 +16,12 @@ type Config struct {
 	Notifier Notifier
 }
 
+type mockNotifier struct {
+}
+
+func (m *mockNotifier) Notify(event *proto.Event) {
+}
+
 func WithNotifier(n Notifier) Option {
 	return func(c *Config) {
 		c.Notifier = n
@@ -24,7 +30,8 @@ func WithNotifier(n Notifier) Option {
 
 func DefaultConfig() *Config {
 	return &Config{
-		DbPath: "runner.db",
+		DbPath:   "runner.db",
+		Notifier: &mockNotifier{},
 	}
 }
 
