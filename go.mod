@@ -5,7 +5,6 @@ go 1.21.3
 require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/docker/docker v24.0.7+incompatible
-	github.com/golang/protobuf v1.5.3
 	github.com/stretchr/testify v1.8.4
 	google.golang.org/protobuf v1.31.0
 )
