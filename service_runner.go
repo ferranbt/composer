@@ -3,7 +3,6 @@ package composer
 import (
 	"context"
 	"crypto/rand"
-	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -170,7 +169,6 @@ func (s *serviceRunner) WaitCh() <-chan struct{} {
 }
 
 func (t *serviceRunner) Kill(ctx context.Context) error {
-	fmt.Println("_ KILL _")
 	t.killCtxCancel()
 
 	select {
