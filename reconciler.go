@@ -35,11 +35,6 @@ func newReconciler(containers map[string]*proto.ServiceState, project *proto.Pro
 	}
 }
 
-type serviceWithName struct {
-	Name string
-	*proto.Service
-}
-
 func (r *reconciler) buildDag() {
 	d := &dag.Dag{}
 

@@ -1,34 +1,40 @@
 package composer
 
 import (
+	"context"
 	"strings"
 
+	"github.com/ferranbt/composer/docker"
 	"github.com/ferranbt/composer/proto"
 )
+
+type AllocUpdater interface {
+}
 
 type ProjectRunner struct {
 	project *proto.Project
 
-	// containers is a map of the state for the containers in this project
-	containers map[string]*proto.ServiceState
-	notifyFn   Notifier
+	// services is the list of running services
+	services map[string]*serviceRunner
 
-	docker   *dockerProvider
+	notifyFn Notifier
+
+	docker   *docker.Provider
 	store    *BoltdbStore
 	complete bool
 	closeCh  chan struct{}
 	updateCh chan struct{}
 }
 
-func newProjectRunner(project *proto.Project, docker *dockerProvider, store *BoltdbStore, notifyFn Notifier) *ProjectRunner {
+func newProjectRunner(project *proto.Project, docker *docker.Provider, store *BoltdbStore, notifyFn Notifier) *ProjectRunner {
 	p := &ProjectRunner{
-		project:    project,
-		docker:     docker,
-		store:      store,
-		containers: map[string]*proto.ServiceState{},
-		closeCh:    make(chan struct{}),
-		updateCh:   make(chan struct{}, 10),
-		notifyFn:   notifyFn,
+		project:  project,
+		docker:   docker,
+		store:    store,
+		services: map[string]*serviceRunner{},
+		closeCh:  make(chan struct{}),
+		updateCh: make(chan struct{}, 10),
+		notifyFn: notifyFn,
 	}
 	return p
 }
@@ -40,19 +46,16 @@ func (p *ProjectRunner) Restore() error {
 	}
 
 	for _, id := range tasksIds {
-		state, err := p.store.GetTaskState(p.project.Name, id)
-		if err != nil {
-			return err
-		}
+		runner := newServiceRunner(p.project, id, p.project.Services[id], p.docker, p.store, p.taskStateUpdated)
+		p.services[id] = runner
 
-		p.docker.Reattach(p.project.Name, state.Handle.ContainerId, state.Handle)
-		p.containers[id] = state
+		go runner.Run()
 	}
 
 	return nil
 }
 
-func (p *ProjectRunner) notify() {
+func (p *ProjectRunner) taskStateUpdated() {
 	select {
 	case p.updateCh <- struct{}{}:
 	default:
@@ -71,70 +74,53 @@ func (r *ProjectRunner) run() {
 	}
 }
 
+type Status struct {
+	Complete bool
+	State    map[string]*proto.ServiceState
+}
+
+func (r *ProjectRunner) Status() *Status {
+	containersState := map[string]*proto.ServiceState{}
+	for name, state := range r.services {
+		containersState[name] = state.TaskState()
+	}
+
+	s := &Status{
+		Complete: r.complete,
+		State:    containersState,
+	}
+	return s
+}
+
 func (r *ProjectRunner) runIteration() {
-	res := newReconciler(r.containers, r.project).compute()
+	containersState := r.Status().State
+	res := newReconciler(containersState, r.project).compute()
 
 	for name := range res.create {
 		service := r.project.Services[name]
 
-		hash, err := service.Hash()
-		if err != nil {
-			panic(err)
-		}
-
 		// rewrite the network host config if it refers to another running container
-		service = service.Copy()
 		if strings.HasPrefix(service.NetworkMode, "service:") {
 			dep := strings.TrimPrefix(service.NetworkMode, "service:")
-			depState, ok := r.containers[dep]
+			depState, ok := containersState[dep]
 
 			if ok && depState.State == proto.ServiceState_Running {
 				service.NetworkMode = "container:" + depState.Handle.ContainerId
 			}
 		}
 
-		res := &ComputeResource{
-			Name:    name,
-			Project: r.project.Name,
-			Service: service,
-		}
-		handle, err := r.docker.Create(res)
-		if err != nil {
-			panic(err)
-		}
+		runner := newServiceRunner(r.project, name, service, r.docker, r.store, r.taskStateUpdated)
+		r.services[name] = runner
 
-		state := &proto.ServiceState{
-			State:  proto.ServiceState_Running,
-			Handle: handle,
-			Hash:   hash,
-		}
-
-		previous, ok := r.containers[name]
-		if ok {
-			state.Events = previous.Events
-		}
-
-		state.AddEvent(proto.NewEvent("running"))
-		r.setContainerState(name, state)
+		go runner.Run()
 	}
 
 	for name := range res.remove {
-		state := r.containers[name]
-		if err := r.docker.Kill(state.Handle.ContainerId); err != nil {
-			panic(err)
-		}
+		r.services[name].Kill(context.Background())
 	}
 
 	for name := range res.taint {
-		state := r.containers[name]
-		state.State = proto.ServiceState_Tainted
-		state.AddEvent(proto.NewEvent("taint"))
-
-		r.setContainerState(name, state)
-	}
-
-	if len(res.create) != 0 {
-		r.notify()
+		r.services[name].Taint()
 	}
 
 	r.complete = res.complete
@@ -143,38 +129,5 @@ func (r *ProjectRunner) runIteration() {
 func (r *ProjectRunner) UpdateProject(p *proto.Project) {
 	r.project = p
 	r.complete = false
-	r.notify()
-}
-
-func (r *ProjectRunner) setContainerState(name string, state *proto.ServiceState) {
-	if err := r.store.PutTaskState(r.project.Name, name, state); err != nil {
-		panic(err)
-	}
-	r.containers[name] = state
-	if r.notifyFn != nil {
-		r.notifyFn.Notify(r.project.Name, name, state)
-	}
-}
-
-func (r *ProjectRunner) Update(c *ComputeUpdate) error {
-	node, ok := r.containers[c.Name]
-	if !ok {
-		panic("?")
-	}
-
-	if c.Created != nil {
-		node.State = proto.ServiceState_Running
-	} else if c.Completed != nil {
-		node.State = proto.ServiceState_Dead
-		node.AddEvent(proto.NewEvent("completed"))
-	}
-
-	r.setContainerState(c.Name, node)
-
-	select {
-	case r.updateCh <- struct{}{}:
-	default:
-	}
-
-	return nil
+	r.taskStateUpdated()
 }
