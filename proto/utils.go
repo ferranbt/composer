@@ -6,11 +6,10 @@ import (
 	"fmt"
 
 	"google.golang.org/protobuf/proto"
-	gproto "google.golang.org/protobuf/proto"
 )
 
 func (s *Service) Hash() (string, error) {
-	raw, err := gproto.Marshal(s)
+	raw, err := proto.Marshal(s)
 	if err != nil {
 		return "", err
 	}
