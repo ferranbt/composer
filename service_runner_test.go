@@ -149,9 +149,8 @@ func TestTaskRunner_Hooks(t *testing.T) {
 		assert.NoError(t, state.PutProject(project))
 	}
 
-	hook := &testHook{}
-	hooks := []hooks.ServiceHook{
-		hook,
+	hooks := []hooks.ServiceHookFactory{
+		testHookFactory,
 	}
 
 	sink := &eventSink{}
@@ -162,14 +161,29 @@ func TestTaskRunner_Hooks(t *testing.T) {
 	// wait for the process to finish
 	testWaitForTaskToDie(t, runner)
 
+	hook := runner.runnerHooks[0].(*testHook)
+
 	// assert the state of the hooks
+	require.NotEmpty(t, hook.project)
 	require.NotEmpty(t, hook.service)
+	require.True(t, hook.prestart)
+	require.True(t, hook.stop)
 	require.NotEmpty(t, hook.ip)
 }
 
 type testHook struct {
-	service *proto.Service
-	ip      string
+	project  *proto.Project
+	service  *proto.Service
+	prestart bool
+	ip       string
+	stop     bool
+}
+
+func testHookFactory(project *proto.Project, service *proto.Service) hooks.ServiceHook {
+	return &testHook{
+		project: project,
+		service: service,
+	}
 }
 
 func (t *testHook) Name() string {
@@ -177,7 +191,7 @@ func (t *testHook) Name() string {
 }
 
 func (t *testHook) Prestart(ctx context.Context, req *hooks.ServicePrestartHookRequest) error {
-	t.service = req.Service
+	t.prestart = true
 	return nil
 }
 
@@ -187,6 +201,7 @@ func (t *testHook) Poststart(ctx context.Context, req *hooks.ServicePoststartHoo
 }
 
 func (t *testHook) Stop(context.Context, *hooks.ServiceStopRequest) error {
+	t.stop = true
 	return nil
 }
 

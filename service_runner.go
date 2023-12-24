@@ -34,7 +34,7 @@ type serviceRunner struct {
 	runnerHooks      []hooks.ServiceHook
 }
 
-func newServiceRunner(project *proto.Project, name string, service *proto.Service, driver *docker.Provider, store *BoltdbStore, taskStateUpdated func(), notifier Notifier, hooks []hooks.ServiceHook) *serviceRunner {
+func newServiceRunner(project *proto.Project, name string, service *proto.Service, driver *docker.Provider, store *BoltdbStore, taskStateUpdated func(), notifier Notifier, hooks []hooks.ServiceHookFactory) *serviceRunner {
 	killCtx, killCancel := context.WithCancel(context.Background())
 
 	hash, err := service.Hash()
@@ -42,7 +42,7 @@ func newServiceRunner(project *proto.Project, name string, service *proto.Servic
 		panic(err)
 	}
 
-	return &serviceRunner{
+	r := &serviceRunner{
 		logger:           slog.Default(),
 		driver:           driver,
 		project:          project,
@@ -56,8 +56,13 @@ func newServiceRunner(project *proto.Project, name string, service *proto.Servic
 		taskStateUpdated: taskStateUpdated,
 		store:            store,
 		notifier:         notifier,
-		runnerHooks:      hooks,
 	}
+
+	for _, hook := range hooks {
+		r.runnerHooks = append(r.runnerHooks, hook(project, service))
+	}
+
+	return r
 }
 
 func (t *serviceRunner) SetLogger(logger *slog.Logger) {

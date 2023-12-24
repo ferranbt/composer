@@ -16,7 +16,7 @@ type Notifier interface {
 type Config struct {
 	DbPath   string
 	Notifier Notifier
-	Hooks    []hooks.ServiceHook
+	Hooks    []hooks.ServiceHookFactory
 }
 
 type mockNotifier struct {
@@ -25,10 +25,10 @@ type mockNotifier struct {
 func (m *mockNotifier) Notify(event *proto.Event) {
 }
 
-func WithHooks(h ...hooks.ServiceHook) Option {
+func WithHooks(h ...hooks.ServiceHookFactory) Option {
 	return func(c *Config) {
 		if c.Hooks == nil {
-			c.Hooks = []hooks.ServiceHook{}
+			c.Hooks = []hooks.ServiceHookFactory{}
 		}
 		c.Hooks = append(c.Hooks, h...)
 	}

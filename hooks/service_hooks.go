@@ -10,6 +10,8 @@ type ServiceHook interface {
 	Name() string
 }
 
+type ServiceHookFactory func(project *proto.Project, service *proto.Service) ServiceHook
+
 type ServicePrestartHookRequest struct {
 	Service *proto.Service
 }

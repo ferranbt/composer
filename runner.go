@@ -25,10 +25,10 @@ type ProjectRunner struct {
 	complete bool
 	closeCh  chan struct{}
 	updateCh chan struct{}
-	hooks    []hooks.ServiceHook
+	hooks    []hooks.ServiceHookFactory
 }
 
-func newProjectRunner(project *proto.Project, docker *docker.Provider, store *BoltdbStore, notifier Notifier, hooks []hooks.ServiceHook) *ProjectRunner {
+func newProjectRunner(project *proto.Project, docker *docker.Provider, store *BoltdbStore, notifier Notifier, hooks []hooks.ServiceHookFactory) *ProjectRunner {
 	p := &ProjectRunner{
 		project:  project,
 		docker:   docker,
