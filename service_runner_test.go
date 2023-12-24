@@ -128,7 +128,7 @@ func TestTaskRunner_Hooks(t *testing.T) {
 
 	task := &proto.Service{
 		Image: "busybox:1.29.3",
-		Args:  []string{"sleep", "5"},
+		Args:  []string{"sleep", "3"},
 	}
 
 	project := &proto.Project{
@@ -157,6 +157,7 @@ func TestTaskRunner_Hooks(t *testing.T) {
 	runner := newServiceRunner(project, name, task, driver, state, func() {}, sink, hooks)
 
 	go runner.Run()
+	defer destroyRunner(runner)
 
 	// wait for the process to finish
 	testWaitForTaskToDie(t, runner)
