@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/ferranbt/composer/docker"
+	"github.com/ferranbt/composer/hooks"
 	"github.com/ferranbt/composer/proto"
 )
 
@@ -24,9 +25,10 @@ type ProjectRunner struct {
 	complete bool
 	closeCh  chan struct{}
 	updateCh chan struct{}
+	hooks    []hooks.ServiceHook
 }
 
-func newProjectRunner(project *proto.Project, docker *docker.Provider, store *BoltdbStore, notifier Notifier) *ProjectRunner {
+func newProjectRunner(project *proto.Project, docker *docker.Provider, store *BoltdbStore, notifier Notifier, hooks []hooks.ServiceHook) *ProjectRunner {
 	p := &ProjectRunner{
 		project:  project,
 		docker:   docker,
@@ -35,6 +37,7 @@ func newProjectRunner(project *proto.Project, docker *docker.Provider, store *Bo
 		closeCh:  make(chan struct{}),
 		updateCh: make(chan struct{}, 10),
 		notifier: notifier,
+		hooks:    hooks,
 	}
 	return p
 }
@@ -46,7 +49,7 @@ func (p *ProjectRunner) Restore() error {
 	}
 
 	for _, id := range tasksIds {
-		runner := newServiceRunner(p.project, id, p.project.Services[id], p.docker, p.store, p.taskStateUpdated, p.notifier)
+		runner := newServiceRunner(p.project, id, p.project.Services[id], p.docker, p.store, p.taskStateUpdated, p.notifier, p.hooks)
 		p.services[id] = runner
 
 		go runner.Run()
@@ -109,7 +112,7 @@ func (r *ProjectRunner) runIteration() {
 			}
 		}
 
-		runner := newServiceRunner(r.project, name, service, r.docker, r.store, r.taskStateUpdated, r.notifier)
+		runner := newServiceRunner(r.project, name, service, r.docker, r.store, r.taskStateUpdated, r.notifier, r.hooks)
 		r.services[name] = runner
 
 		go runner.Run()

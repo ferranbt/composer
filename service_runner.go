@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ferranbt/composer/docker"
+	"github.com/ferranbt/composer/hooks"
 	"github.com/ferranbt/composer/proto"
 )
 
@@ -30,9 +31,10 @@ type serviceRunner struct {
 	taskStateUpdated func()
 	restartCount     uint64
 	notifier         Notifier
+	runnerHooks      []hooks.ServiceHook
 }
 
-func newServiceRunner(project *proto.Project, name string, service *proto.Service, driver *docker.Provider, store *BoltdbStore, taskStateUpdated func(), notifier Notifier) *serviceRunner {
+func newServiceRunner(project *proto.Project, name string, service *proto.Service, driver *docker.Provider, store *BoltdbStore, taskStateUpdated func(), notifier Notifier, hooks []hooks.ServiceHook) *serviceRunner {
 	killCtx, killCancel := context.WithCancel(context.Background())
 
 	hash, err := service.Hash()
@@ -54,6 +56,7 @@ func newServiceRunner(project *proto.Project, name string, service *proto.Servic
 		taskStateUpdated: taskStateUpdated,
 		store:            store,
 		notifier:         notifier,
+		runnerHooks:      hooks,
 	}
 }
 
@@ -76,7 +79,25 @@ MAIN:
 		default:
 		}
 
+		if err := t.preStart(); err != nil {
+			t.logger.Error("prestart failed", "error", err)
+			goto RESTART
+		}
+
+		select {
+		case <-t.killCtx.Done():
+			break MAIN
+		case <-t.shutdownCh:
+			return
+		default:
+		}
+
 		if err := t.runDriver(); err != nil {
+			goto RESTART
+		}
+
+		if err := t.postStart(); err != nil {
+			t.logger.Error("poststart failed", "error", err)
 			goto RESTART
 		}
 
@@ -117,6 +138,10 @@ MAIN:
 	// task is dead
 	t.UpdateStatus(proto.ServiceState_Dead, nil)
 
+	// Run the stop hooks
+	if err := t.stop(); err != nil {
+		t.logger.Error("stop failed", "error", err)
+	}
 }
 
 func (s *serviceRunner) shouldRestart() (bool, time.Duration) {

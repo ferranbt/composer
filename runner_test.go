@@ -259,7 +259,7 @@ func newTestRunner(t *testing.T, p *proto.Project) *ProjectRunner {
 	require.NoError(t, store.PutProject(p))
 
 	sink := &eventSink{}
-	runner := newProjectRunner(p, docker.NewProvider(), store, sink)
+	runner := newProjectRunner(p, docker.NewProvider(), store, sink, nil)
 	return runner
 }
 
