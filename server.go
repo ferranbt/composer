@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ferranbt/composer/docker"
+	"github.com/ferranbt/composer/hooks"
 	"github.com/ferranbt/composer/proto"
 )
 
@@ -15,12 +16,22 @@ type Notifier interface {
 type Config struct {
 	DbPath   string
 	Notifier Notifier
+	Hooks    []hooks.ServiceHookFactory
 }
 
 type mockNotifier struct {
 }
 
 func (m *mockNotifier) Notify(event *proto.Event) {
+}
+
+func WithHooks(h ...hooks.ServiceHookFactory) Option {
+	return func(c *Config) {
+		if c.Hooks == nil {
+			c.Hooks = []hooks.ServiceHookFactory{}
+		}
+		c.Hooks = append(c.Hooks, h...)
+	}
 }
 
 func WithNotifier(n Notifier) Option {
@@ -79,7 +90,7 @@ func (r *Server) initialLoad() error {
 	}
 
 	for _, p := range projects {
-		runner := newProjectRunner(p, r.docker, r.store, r.config.Notifier)
+		runner := newProjectRunner(p, r.docker, r.store, r.config.Notifier, r.config.Hooks)
 		if err := runner.Restore(); err != nil {
 			return err
 		}
@@ -103,7 +114,7 @@ func (r *Server) GetProjectStatus(name string) (*Status, error) {
 func (r *Server) Up(ctx context.Context, req *proto.Project) (*proto.Project_Ref, error) {
 	runner, ok := r.runners[req.Name]
 	if !ok {
-		runner = newProjectRunner(req, r.docker, r.store, r.config.Notifier)
+		runner = newProjectRunner(req, r.docker, r.store, r.config.Notifier, r.config.Hooks)
 
 		if err := r.store.PutProject(req); err != nil {
 			return nil, err
