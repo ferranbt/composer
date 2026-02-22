@@ -25,7 +25,7 @@ m.AddSpec(composer.NewSpec("api").
     DependsOn("postgres", "healthy"))
 
 // Run everything
-runtime, _ := composer.NewRuntime(m, nil, &composer.RuntimeConfig{
+runtime, _ := composer.NewRuntime(m, &composer.RuntimeConfig{
     LogsLocation: "./logs",
 })
 runtime.Run(context.Background())
