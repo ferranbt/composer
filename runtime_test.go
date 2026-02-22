@@ -484,7 +484,7 @@ func TestTaskRef_ContextCancelled_WhileTaskStarting(t *testing.T) {
 
 	err = <-errCh
 	require.NoError(t, err)
-	require.Equal(t, task.status, TaskStatusStopped)
+	require.Equal(t, TaskStatusStopped, task.GetStatus())
 }
 
 func TestTaskRef_ContextCancelled_AfterStarted(t *testing.T) {
@@ -508,7 +508,7 @@ func TestTaskRef_ContextCancelled_AfterStarted(t *testing.T) {
 
 	err = <-errCh
 	require.NoError(t, err)
-	require.Equal(t, task.status, TaskStatusStopped)
+	require.Equal(t, TaskStatusStopped, task.GetStatus())
 }
 
 func TestTaskRef_Run_WithHealthCheck(t *testing.T) {

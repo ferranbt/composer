@@ -36,6 +36,7 @@ type Runtime struct {
 	wg     sync.WaitGroup
 	ctx    context.Context
 	cancel context.CancelFunc
+	mu     sync.Mutex
 
 	reservedPorts map[int]bool
 }
@@ -218,7 +219,9 @@ func (r *Runtime) preValidateManifest() error {
 
 func (r *Runtime) Run(ctx context.Context) error {
 	// Create internal context for task lifetime
+	r.mu.Lock()
 	r.ctx, r.cancel = context.WithCancel(context.Background())
+	r.mu.Unlock()
 
 	err := r.preValidateManifest()
 	if err != nil {
@@ -314,8 +317,12 @@ func (r *Runtime) Run(ctx context.Context) error {
 }
 
 func (r *Runtime) Stop() {
-	if r.cancel != nil {
-		r.cancel()
+	r.mu.Lock()
+	cancel := r.cancel
+	r.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
 	}
 	// Wait for all task goroutines to finish
 	r.wg.Wait()
